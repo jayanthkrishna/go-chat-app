@@ -1,18 +1,19 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
-	"math/rand"
+	mrand "math/rand"
 	"net/http"
 
 	"golang.org/x/net/websocket"
 )
 
 type Server struct {
-	connections map[string]map[*websocket.Conn]string
+	connections map[string]map[string]*websocket.Conn
 }
 
 type Message struct {
@@ -23,7 +24,7 @@ type Message struct {
 
 func NewServer() *Server {
 	return &Server{
-		connections: make(map[string]map[*websocket.Conn]string),
+		connections: make(map[string]map[string]*websocket.Conn),
 	}
 }
 func (s *Server) handleWS(ws *websocket.Conn) {
@@ -63,10 +64,10 @@ func (s *Server) handleWS(ws *websocket.Conn) {
 	token := generateToken()
 
 	if s.connections[phonenumber] == nil {
-		s.connections[phonenumber] = make(map[*websocket.Conn]string)
+		s.connections[phonenumber] = make(map[string]*websocket.Conn)
 	}
 
-	s.connections[phonenumber][ws] = token
+	s.connections[phonenumber][token] = ws
 
 	var Token = map[string]string{"token": token}
 	jsonToken, _ := json.Marshal(Token)
@@ -81,7 +82,7 @@ func (s *Server) handleWS(ws *websocket.Conn) {
 }
 
 func generateOTP() string {
-	return fmt.Sprintf("%06d", rand.Intn(1000000))
+	return fmt.Sprintf("%06d", mrand.Intn(1000000))
 }
 
 // sendOTP simulates sending the OTP to the user's phone number (for demonstration purposes)
@@ -127,7 +128,7 @@ func (s *Server) Listen(ws *websocket.Conn) {
 		}
 
 		if s.connections[message.To] != nil {
-			for conn, _ := range s.connections[message.To] {
+			for _, conn := range s.connections[message.To] {
 				if _, err := conn.Write(buf[:n]); err != nil {
 					log.Println("error while sending the data to receiver")
 

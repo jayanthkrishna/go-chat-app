@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,18 +22,23 @@ type Client struct {
 	phonenumber string
 }
 
+type OTP struct {
+	OTP string `json:"otp"`
+}
+
 func main() {
 	origin := "http://localhost/"
 	url := "ws://localhost:3000/ws"
 
 	log.Println("Enter your phone number here")
 	phonebuf, err := bufio.NewReader(os.Stdin).ReadBytes('\n')
-	var phonenumber string = string(phonebuf)
+	var phonenumber string = string(phonebuf[:len(phonebuf)-1])
 	if err != nil {
 		log.Println("erro while reading user phone number", err)
 	}
 
 	url = fmt.Sprintf("%s?phone=%s", url, phonenumber)
+	log.Println("URL :", url)
 
 	ws, err := websocket.Dial(url, "", origin)
 
@@ -40,24 +46,40 @@ func main() {
 		log.Fatal(err)
 	}
 	defer ws.Close()
+	log.Println("Enter the OTP here.")
+	otpbuf, _ := bufio.NewReader(os.Stdin).ReadBytes('\n')
+
+	otpbuf = otpbuf[:len(otpbuf)-1]
+	otp := string(otpbuf)
+
+	log.Println("OTP: ", otp)
+
+	OTP := OTP{
+		OTP: otp,
+	}
+
+	otpJSON, _ := json.Marshal(&OTP)
+	ws.Write(otpJSON)
 	fmt.Println("Connected to the server ")
-	// done := make(chan struct{})
+	done := make(chan struct{})
 
 	client := Client{
 		ws:          ws,
 		phonenumber: phonenumber,
 	}
-	go client.ReadLoop()
+	go client.ReadLoop(done)
 
-	go client.WriteLoop()
+	go client.WriteLoop(done)
+
+	<-done
 
 }
 
-func (c *Client) ReadLoop() {
-	defer c.ws.Close()
-
+func (c *Client) ReadLoop(done chan struct{}) {
+	defer close(done)
+	buf := make([]byte, 1024)
 	for {
-		buf := make([]byte, 1024)
+
 		n, err := c.ws.Read(buf)
 		if err != nil {
 			if err.Error() == "EOF" {
@@ -83,14 +105,16 @@ func (c *Client) ReadLoop() {
 	}
 }
 
-func (c *Client) WriteLoop() {
+func (c *Client) WriteLoop(done chan struct{}) {
 
-	defer c.ws.Close()
-	// defer close(done)
+	defer close(done)
+	reader := bufio.NewReader(os.Stdin)
 	for {
-		reader := bufio.NewReader(os.Stdin)
-		tobuf, err := reader.ReadBytes('\n')
-		messagebuf, err := reader.ReadBytes('\n')
+
+		tobuf, _ := reader.ReadBytes('\n')
+		tobuf = bytes.TrimRight(tobuf, "\n")
+		messagebuf, _ := reader.ReadBytes('\n')
+		messagebuf = bytes.TrimRight(messagebuf, "\n")
 
 		message := Message{
 			From:    c.phonenumber,
@@ -116,7 +140,7 @@ func (c *Client) WriteLoop() {
 			return
 
 		}
-		log.Printf("Message written to %s", message.To)
+		log.Printf("Message written to %s : %s", message.To, message.Message)
 	}
 
 }
