@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 
 	"golang.org/x/net/websocket"
@@ -27,17 +28,27 @@ type OTP struct {
 }
 
 func main() {
-	origin := "http://localhost/"
-	url := "ws://localhost:3000/ws"
 
 	log.Println("Enter your phone number here")
 	phonebuf, err := bufio.NewReader(os.Stdin).ReadBytes('\n')
 	var phonenumber string = string(phonebuf[:len(phonebuf)-1])
 	if err != nil {
-		log.Println("erro while reading user phone number", err)
+		log.Println("error while reading user phone number", err)
 	}
 
-	url = fmt.Sprintf("%s?phone=%s", url, phonenumber)
+	url := "http://localhost:3001/gen-token?name="
+
+	token, err := GetToken(url, phonenumber)
+
+	if err != nil {
+		log.Println("Error while getting token frok auth server")
+		return
+	}
+
+	origin := "http://localhost/"
+	url = "ws://localhost:3000/ws"
+
+	url = fmt.Sprintf("%s?phone=%s&token=%s", url, phonenumber, token)
 	log.Println("URL :", url)
 
 	ws, err := websocket.Dial(url, "", origin)
@@ -46,20 +57,20 @@ func main() {
 		log.Fatal(err)
 	}
 	defer ws.Close()
-	log.Println("Enter the OTP here.")
-	otpbuf, _ := bufio.NewReader(os.Stdin).ReadBytes('\n')
+	// log.Println("Enter the OTP here.")
+	// otpbuf, _ := bufio.NewReader(os.Stdin).ReadBytes('\n')
 
-	otpbuf = otpbuf[:len(otpbuf)-1]
-	otp := string(otpbuf)
+	// otpbuf = otpbuf[:len(otpbuf)-1]
+	// otp := string(otpbuf)
 
-	log.Println("OTP: ", otp)
+	// log.Println("OTP: ", otp)
 
-	OTP := OTP{
-		OTP: otp,
-	}
+	// OTP := OTP{
+	// 	OTP: otp,
+	// }
 
-	otpJSON, _ := json.Marshal(&OTP)
-	ws.Write(otpJSON)
+	// otpJSON, _ := json.Marshal(&OTP)
+	// ws.Write(otpJSON)
 	fmt.Println("Connected to the server ")
 	done := make(chan struct{})
 
@@ -73,6 +84,32 @@ func main() {
 
 	<-done
 
+}
+
+func GetToken(url string, phonenumber string) (string, error) {
+
+	url = url + phonenumber
+
+	// Send GET request to the server
+	resp, err := http.Get(url)
+	if err != nil {
+		fmt.Println("Error sending request:", err)
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	type Token struct {
+		Token string `json:"string"`
+	}
+	var token Token
+	err = json.NewDecoder(resp.Body).Decode(&token)
+	if err != nil {
+		fmt.Println("Error decoding the response to json", err)
+		return "", err
+	}
+
+	// Print the response body
+	return token.Token, nil
 }
 
 func (c *Client) ReadLoop(done chan struct{}) {

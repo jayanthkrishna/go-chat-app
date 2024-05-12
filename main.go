@@ -8,9 +8,14 @@ import (
 	"log"
 	mrand "math/rand"
 	"net/http"
+	"time"
 
 	"golang.org/x/net/websocket"
+
+	"github.com/dgrijalva/jwt-go"
 )
+
+var secretKey = []byte("your_secret_key")
 
 type Server struct {
 	connections map[string]map[string]*websocket.Conn
@@ -98,6 +103,51 @@ func generateToken() string {
 		log.Fatal("Error generating token:", err)
 	}
 	return base64.URLEncoding.EncodeToString(b)
+}
+
+func validateToken(tokenString string) bool {
+
+	// Define a secret key. This should be securely stored and not exposed in your code.
+
+	// Sample token (replace with your actual token)
+
+	// Parse the token
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		// Validate the signing method
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return secretKey, nil
+	})
+	if err != nil {
+		fmt.Println("Token parsing error:", err)
+		return false
+	}
+
+	// Check if the token is valid
+	if !token.Valid {
+		fmt.Println("Invalid token")
+		return false
+	}
+
+	// Extract claims from the token
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		fmt.Println("Invalid claims format")
+		return false
+	}
+
+	// Extract expiration time from claims
+	exp := int64(claims["exp"].(float64))
+
+	// Validate expiration time
+	if time.Now().Unix() > exp {
+		fmt.Println("Token has expired")
+		return false
+	}
+
+	fmt.Println("Token is valid and not expired")
+	return true
 }
 
 func (s *Server) Listen(ws *websocket.Conn) {
