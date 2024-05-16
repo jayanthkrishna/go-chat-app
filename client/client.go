@@ -36,7 +36,7 @@ func main() {
 		log.Println("error while reading user phone number", err)
 	}
 
-	url := "http://localhost:3001/gen-token?name="
+	url := "http://localhost:3001/gen-token?phone="
 
 	token, err := GetToken(url, phonenumber)
 
